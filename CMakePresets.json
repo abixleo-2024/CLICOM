@@ -1,0 +1,89 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Windows · MSVC · Debug",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/windows-msvc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":    "Debug",
+        "CLICOM_BUILD_TESTS":  "ON",
+        "CLICOM_BUILD_CLIENT": "ON",
+        "CLICOM_BUILD_SERVER": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows · MSVC · Release",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/windows-msvc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":    "Release",
+        "CLICOM_BUILD_TESTS":  "ON",
+        "CLICOM_BUILD_CLIENT": "ON",
+        "CLICOM_BUILD_SERVER": "ON"
+      }
+    },
+    {
+      "name": "windows-ninja-debug",
+      "displayName": "Windows · Ninja · Debug  (MinGW / LLVM / MSVC)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-ninja-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":    "Debug",
+        "CLICOM_BUILD_TESTS":  "ON",
+        "CLICOM_BUILD_CLIENT": "ON",
+        "CLICOM_BUILD_SERVER": "ON"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux · Ninja · Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":    "Debug",
+        "CLICOM_BUILD_TESTS":  "ON",
+        "CLICOM_BUILD_CLIENT": "ON",
+        "CLICOM_BUILD_SERVER": "ON"
+      }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux · Ninja · Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":    "Release",
+        "CLICOM_BUILD_TESTS":  "ON",
+        "CLICOM_BUILD_CLIENT": "ON",
+        "CLICOM_BUILD_SERVER": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-msvc-debug",   "configurePreset": "windows-msvc-debug"   },
+    { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release" },
+    { "name": "windows-ninja-debug",  "configurePreset": "windows-ninja-debug"  },
+    { "name": "linux-debug",          "configurePreset": "linux-debug"           },
+    { "name": "linux-release",        "configurePreset": "linux-release"         }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-ninja-debug",
+      "configurePreset": "windows-ninja-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

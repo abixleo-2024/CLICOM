@@ -1,0 +1,19 @@
+# Created with YamlCreate.ps1 v2.4.3 $debug=QUSU.CRLF -- Package manifest for CLICOM
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+PackageIdentifier: CLICOM.CLICOM
+PackageVersion: 2.0.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: bin/clicom.exe
+    PortableCommandAlias: clicom
+  - RelativeFilePath: bin/clicom-server.exe
+    PortableCommandAlias: clicom-server
+ReleaseDate: 2026-10-12
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/clicom-project/clicom/releases/download/v2.0.0/clicom-2.0.0-windows-x64.zip
+    InstallerSha256: 8658b8c3e982d62023a907d2b66df1190a111c2d614d35c27b13a11760e708d1
+ManifestType: installer
+ManifestVersion: 1.6.0

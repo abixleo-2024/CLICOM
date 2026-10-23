@@ -1,0 +1,13 @@
+# Example client configuration (copy to ~/.config/clicom/client.conf or
+# use with: clicom --config /path/to/client.conf)
+# See config/client.conf for full documentation.
+
+[server]
+host = 127.0.0.1
+port = 8765
+
+[node]
+display_name = MY-NODE
+
+[logging]
+level = info

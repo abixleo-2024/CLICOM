@@ -1,0 +1,43 @@
+# Created with YamlCreate.ps1 v2.4.3 $debug=QUSU.CRLF -- Package manifest for CLICOM
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: CLICOM.CLICOM
+PackageVersion: 2.0.0
+PackageLocale: en-US
+Publisher: CLICOM Team
+PublisherUrl: https://github.com/clicom-project/clicom
+PublisherSupportUrl: https://github.com/clicom-project/clicom/issues
+Author: CLICOM Contributors
+PackageName: CLICOM
+PackageUrl: https://github.com/clicom-project/clicom
+License: MIT
+LicenseUrl: https://github.com/clicom-project/clicom/blob/main/LICENSE
+Copyright: Copyright (c) 2026 CLICOM Contributors
+ShortDescription: Secure, modular CLI push-to-talk voice and real-time collaboration communications suite.
+Description: |-
+  CLICOM is a secure, modular, extensible command-line communication system built in C11.
+  It provides terminal-based Push-To-Talk (PTT) voice channels, TLS 1.3 mutual confidentiality,
+  cryptographic authentication, real-time speech analytics, captions, collaborative notes,
+  and role-based administrative governance.
+Moniker: clicom
+Tags:
+  - cli
+  - terminal
+  - voice
+  - ptt
+  - push-to-talk
+  - audio
+  - opus
+  - tls
+  - collaboration
+ReleaseNotes: |-
+  CLICOM 2.0.0 is the complete production-grade release featuring:
+  - TLS 1.3 fail-closed secure communications by default
+  - Server-authoritative 5000 ms PTT arbitration floor control
+  - Opus 48 kHz voice compression with adaptive bitrates
+  - Exponential backoff reconnection and resilient watchdog keepalives
+  - Live speech analysis, captions, and collaborative channel notes
+  - Role-based administration and security keyword auditing
+ReleaseNotesUrl: https://github.com/clicom-project/clicom/releases/tag/v2.0.0
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

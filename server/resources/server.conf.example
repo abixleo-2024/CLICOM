@@ -1,0 +1,17 @@
+# Example server configuration.
+# See config/server.conf for full documentation.
+
+[server]
+bind_address = 0.0.0.0
+port         = 8765
+
+[speech]
+analysis_mode = server_mediated
+
+[security]
+rules_file  = security_rules.conf
+auto_action = none
+
+[storage]
+backend       = sqlite
+database_file = clicom.db
