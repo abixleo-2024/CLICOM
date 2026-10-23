@@ -1,0 +1,6 @@
+# CLICOM Python Terminal Interface Dependencies
+textual>=8.0.0
+
+# Development and Testing
+pytest>=8.0.0
+pytest-asyncio>=1.0.0
