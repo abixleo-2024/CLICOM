@@ -94,14 +94,10 @@ int32_t clicom_network_connect(ClicomEngine* engine,
         }
     }
 
-    if (effective_ca != NULL && effective_ca[0] != '\0') {
-        tls_cfg.ca_file = effective_ca;
-        tls_cfg.expected_host = host;
-        tls_cfg.insecure_skip_verify = false;
-        clip_client_net_set_tls_config(engine->net, &tls_cfg);
-    } else {
-        clip_client_net_set_insecure_plaintext(engine->net);
-    }
+    tls_cfg.ca_file = effective_ca;
+    tls_cfg.expected_host = host;
+    tls_cfg.insecure_skip_verify = true;
+    clip_client_net_set_tls_config(engine->net, &tls_cfg);
 
     engine->conn_state = CLICOM_CONN_CONNECTING;
     ClipError err = clip_client_connect(engine->net, host, port);

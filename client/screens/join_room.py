@@ -83,6 +83,13 @@ class JoinRoomScreen(Screen):
 
         if engine and engine.is_alive:
             try:
+                if app._server is not None and not engine.is_network_connected():
+                    err_label.update(
+                        f"[bold red]Cannot Join Room: Disconnected from Server ({app._server}).\n"
+                        f"Please ensure clicom-server is running on {app._server}:{app._port}.[/]"
+                    )
+                    return
+
                 if engine.is_network_connected():
                     # Server-authoritative room join via invitation key
                     r_id, r_name = engine.network_join_room(target_key)
@@ -90,7 +97,7 @@ class JoinRoomScreen(Screen):
                     app.current_room_name = r_name or effective_room
                     self.notify(f"Joined server room: {r_name} ({r_id})", title="CLICOM Network")
                 else:
-                    # Local demonstration state
+                    # Local demonstration state (only when running offline without -s)
                     engine.room_join(effective_room, target_key)
                     app.current_room_key = target_key
                     app.current_room_name = effective_room

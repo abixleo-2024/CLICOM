@@ -16,6 +16,7 @@ struct clip_transport {
     SSL *ssl;
     bool owns_ctx;
     bool tls_established;
+    bool insecure_skip_verify;
     char expected_host[256];
     char tls_version[32];
     char cipher_name[64];
@@ -122,16 +123,22 @@ ClipError clip_transport_create_client(const clip_tls_client_config_t *config,
             char err_buf[256];
             clip_tls_get_last_error(err_buf, sizeof(err_buf));
             CLIP_LOGE("Failed to load trusted CA '%s': %s", config->ca_file, err_buf);
-            SSL_CTX_free(ctx);
-            return CLIP_ERR_TLS_CERT_VERIFY;
+            if (!config->insecure_skip_verify) {
+                SSL_CTX_free(ctx);
+                return CLIP_ERR_TLS_CERT_VERIFY;
+            }
         }
     } else {
         /* Use system default CA locations */
         SSL_CTX_set_default_verify_paths(ctx);
     }
 
-    /* Set strict peer verification: verify server certificate */
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    /* Set peer verification */
+    if (config->insecure_skip_verify) {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    } else {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    }
 
     /* Optional client mTLS cert */
     if (config->client_cert && config->client_key) {
@@ -151,6 +158,7 @@ ClipError clip_transport_create_client(const clip_tls_client_config_t *config,
     trans->ssl = NULL;
     trans->owns_ctx = true;
     trans->tls_established = false;
+    trans->insecure_skip_verify = config->insecure_skip_verify;
 
     if (config->expected_host && config->expected_host[0]) {
         strncpy(trans->expected_host, config->expected_host, sizeof(trans->expected_host) - 1);
@@ -219,42 +227,44 @@ ClipError clip_transport_connect(clip_transport_t *trans, const char *host, uint
 
     SSL_set_fd(trans->ssl, (int)trans->sock);
 
-    /* RFC 6066: IP literals MUST NOT be sent in SNI (server_name) extension.
-     * RFC 6125 / OpenSSL: Use SSL_set1_host for DNS names or SSL_set1_host for IP/hostname matching.
-     */
-    bool is_ip_literal = false;
-    struct in_addr test_in4;
+    if (!trans->insecure_skip_verify && trans->expected_host[0] != '\0') {
+        /* RFC 6066: IP literals MUST NOT be sent in SNI (server_name) extension.
+         * RFC 6125 / OpenSSL: Use SSL_set1_host for DNS names or SSL_set1_host for IP/hostname matching.
+         */
+        bool is_ip_literal = false;
 #ifdef _WIN32
-    if (inet_addr(trans->expected_host) != INADDR_NONE || strcmp(trans->expected_host, "255.255.255.255") == 0) {
-        is_ip_literal = true;
-    }
+        if (inet_addr(trans->expected_host) != INADDR_NONE || strcmp(trans->expected_host, "255.255.255.255") == 0) {
+            is_ip_literal = true;
+        }
 #else
-    if (inet_pton(AF_INET, trans->expected_host, &test_in4) == 1) {
-        is_ip_literal = true;
-    }
+        struct in_addr test_in4;
+        if (inet_pton(AF_INET, trans->expected_host, &test_in4) == 1) {
+            is_ip_literal = true;
+        }
 #endif
 
-    if (is_ip_literal) {
-        /* Do NOT set SNI for IP addresses (RFC 6066 Section 3).
-         * Set target IP address for IP-SAN verification in peer certificate.
-         */
-        X509_VERIFY_PARAM *param = SSL_get0_param(trans->ssl);
-        if (param) {
-            X509_VERIFY_PARAM_set1_ip_asc(param, trans->expected_host);
-        }
-    } else {
-        /* SNI (Server Name Indication) extension for FQDNs */
-        SSL_set_tlsext_host_name(trans->ssl, trans->expected_host);
+        if (is_ip_literal) {
+            /* Do NOT set SNI for IP addresses (RFC 6066 Section 3).
+             * Set target IP address for IP-SAN verification in peer certificate.
+             */
+            X509_VERIFY_PARAM *param = SSL_get0_param(trans->ssl);
+            if (param) {
+                X509_VERIFY_PARAM_set1_ip_asc(param, trans->expected_host);
+            }
+        } else {
+            /* SNI (Server Name Indication) extension for FQDNs */
+            SSL_set_tlsext_host_name(trans->ssl, trans->expected_host);
 
-        /* Strict Hostname verification (RFC 6125 / SAN DNS / CN checking) */
-        SSL_set1_host(trans->ssl, trans->expected_host);
+            /* Strict Hostname verification (RFC 6125 / SAN DNS / CN checking) */
+            SSL_set1_host(trans->ssl, trans->expected_host);
+        }
     }
 
     /* Perform TLS Handshake */
     int ret = SSL_connect(trans->ssl);
     if (ret <= 0) {
         long verify_err = SSL_get_verify_result(trans->ssl);
-        if (verify_err != X509_V_OK) {
+        if (verify_err != X509_V_OK && !trans->insecure_skip_verify) {
             CLIP_LOGE("TLS Certificate verification failed: %s (error code %ld)",
                            X509_verify_cert_error_string(verify_err), verify_err);
             clip_transport_shutdown(trans);
