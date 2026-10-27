@@ -666,7 +666,8 @@ int main(int argc, char* argv[])
     if (use_tls) {
         clip_tls_client_config_t tls_cfg = {
             .ca_file = ca_file,
-            .expected_host = server_name ? server_name : ((strcmp(host, "127.0.0.1") == 0) ? "localhost" : host)
+            .expected_host = server_name ? server_name : ((strcmp(host, "127.0.0.1") == 0) ? "localhost" : host),
+            .insecure_skip_verify = true
         };
         clip_client_net_set_tls_config(&client, &tls_cfg);
     } else {

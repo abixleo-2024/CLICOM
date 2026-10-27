@@ -78,14 +78,16 @@ class ClicomApp(App):
     }
 
     #main-container, #form-container, #instant-container, #live-container {
-        padding: 1 2;
+        padding: 0 1;
+        height: auto;
     }
 
     #tactical-banner {
         color: #00ff88;
         text-style: bold;
         text-align: center;
-        margin-bottom: 1;
+        margin: 0;
+        padding: 0;
     }
 
     .screen-title {
@@ -98,8 +100,9 @@ class ClicomApp(App):
     .panel {
         background: #10151c;
         border: tall #1f2a38;
-        padding: 1 2;
-        margin-bottom: 1;
+        padding: 0 1;
+        margin-bottom: 0;
+        height: auto;
     }
 
     .panel:focus-within {
@@ -109,13 +112,33 @@ class ClicomApp(App):
     .panel-header {
         color: #00d4ff;
         text-style: bold;
-        margin-bottom: 1;
+        margin-bottom: 0;
         border-bottom: solid #1f2a38;
+    }
+
+    #status-box {
+        margin-top: 0;
+        margin-bottom: 0;
+        height: auto;
+    }
+
+    .status-row {
+        height: auto;
+        margin: 0;
+        padding: 0;
+    }
+
+    #menu-options {
+        margin-top: 1;
+        margin-bottom: 0;
+        height: auto;
     }
 
     .menu-button {
         width: 100%;
         margin-bottom: 1;
+        height: 3;
+        min-height: 3;
         background: #161f2c;
         color: #00ff88;
         border: tall #223247;
@@ -206,7 +229,8 @@ class ClicomApp(App):
     #sec-advisory {
         color: #58a6ff;
         text-align: center;
-        margin-top: 1;
+        margin-top: 0;
+        padding: 0;
     }
 
     /* Live Room layout */

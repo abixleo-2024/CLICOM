@@ -94,6 +94,13 @@ class CreateRoomScreen(Screen):
 
         if engine and engine.is_alive:
             try:
+                if app._server is not None and not engine.is_network_connected():
+                    err_label.update(
+                        f"[bold red]Cannot Create Room: Disconnected from Server ({app._server}).\n"
+                        f"Please ensure clicom-server is running on {app._server}:{app._port}.[/]"
+                    )
+                    return
+
                 if engine.is_network_connected():
                     # Server-authoritative room creation
                     room_id_out, key_out = engine.network_create_room(room_id, members)
@@ -101,7 +108,7 @@ class CreateRoomScreen(Screen):
                     app.current_room_name = room_id
                     self.notify(f"Created server room: {room_id} (Key: {key_out})", title="CLICOM Network")
                 else:
-                    # Local demonstration state
+                    # Local demonstration state (only when running offline without -s)
                     generated_key = f"SEC-{room_id[:4].upper()}-99"
                     engine.room_join(room_id, generated_key)
                     app.current_room_key = generated_key

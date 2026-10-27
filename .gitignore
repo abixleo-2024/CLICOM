@@ -65,3 +65,5 @@ packaging/windows/*.wixpdb
 build-release/
 out.txt
 reproduce_*.py
+__pycache__/
+*.pyc

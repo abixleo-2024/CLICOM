@@ -277,12 +277,14 @@ class LiveRoomScreen(Screen):
             if app.engine.is_ptt_active():
                 try:
                     app.engine.set_ptt_active(False)
+                    app.engine.set_mic_muted(True)
                     self.notify("Floor released. Floor is now free.", title="Floor Released")
                 except Exception as e:
                     self.notify(f"Floor release error: {e}", title="Floor Error", severity="error")
             else:
                 try:
                     app.engine.set_ptt_active(True)
+                    app.engine.set_mic_muted(False)
                     self.notify("Floor granted by server! You are transmitting voice.", title="Floor Granted")
                 except NativeCallError as e:
                     if e.error_code == ClicomError.ERR_PTT_BUSY:

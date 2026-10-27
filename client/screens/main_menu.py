@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 class DisplayNameModal(ModalScreen[str]):
     """Modal dialog to configure local client display name."""
 
+    BINDINGS = [
+        Binding("escape", "dismiss_modal", "Cancel", priority=True),
+    ]
+
     DEFAULT_CSS = """
     DisplayNameModal {
         align: center middle;
@@ -61,6 +65,9 @@ class DisplayNameModal(ModalScreen[str]):
                 yield Button("Cancel [Esc]", id="btn-cancel", classes="modal-btn")
                 yield Button("Save [Enter]", variant="primary", id="btn-save", classes="modal-btn")
 
+    def action_dismiss_modal(self) -> None:
+        self.dismiss(self._current_name)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-save":
             val = self.query_one("#name-input", Input).value.strip()
@@ -79,8 +86,7 @@ class MainMenuScreen(Screen):
     BINDINGS = [
         Binding("1", "nav_create", "Create Room", priority=True),
         Binding("2", "nav_join", "Join Room", priority=True),
-        Binding("3", "nav_instant", "Instant Connection", priority=True),
-        Binding("4", "config_name", "Display Name", priority=True),
+        Binding("3", "config_name", "Display Name", priority=True),
         Binding("m", "toggle_mic", "Toggle Mic", priority=True),
         Binding("q", "app.quit", "Exit", priority=True),
     ]
@@ -90,19 +96,19 @@ class MainMenuScreen(Screen):
         with Container(id="main-container"):
             # Tactical Header
             yield Static(
-                "╔════════════════════════════════════════════════════════════════════════════════╗\n"
-                "║             CLICOM TACTICAL TERMINAL COMMUNICATIONS — v2.0.0                  ║\n"
-                "╚════════════════════════════════════════════════════════════════════════════════╝",
+                "┌──────────────────────────────────────────────────────────────────────────────┐\n"
+                "│             CLICOM TACTICAL TERMINAL COMMUNICATIONS — v2.0.0                 │\n"
+                "└──────────────────────────────────────────────────────────────────────────────┘",
                 id="tactical-banner",
             )
 
             # System Status Card
             with Vertical(id="status-box", classes="panel"):
                 yield Label("SYSTEM TELEMETRY & HARDWARE STATUS", classes="panel-header")
-                with Horizontal():
+                with Horizontal(classes="status-row"):
                     yield Static("", id="lbl-node-name")
                     yield Static("", id="lbl-engine-status")
-                with Horizontal():
+                with Horizontal(classes="status-row"):
                     yield Static("", id="lbl-net-status")
                     yield Static("", id="lbl-mic-status")
                     yield Static("", id="lbl-audio-status")
@@ -112,8 +118,7 @@ class MainMenuScreen(Screen):
                 yield Label("PRIMARY DIRECTIVES", classes="panel-header")
                 yield Button("1. Create New Tactical Room", id="btn-create", classes="menu-button")
                 yield Button("2. Join Room via Invitation Key", id="btn-join", classes="menu-button")
-                yield Button("3. Instant Node Connection (Discovery)", id="btn-instant", classes="menu-button")
-                yield Button("4. Configure Local Display Name", id="btn-config-name", classes="menu-button")
+                yield Button("3. Configure Local Display Name", id="btn-config-name", classes="menu-button")
                 yield Button("Q. Exit CLICOM", id="btn-exit", variant="error", classes="menu-button")
 
             # Footer notification / security banner
@@ -174,8 +179,6 @@ class MainMenuScreen(Screen):
             self.action_nav_create()
         elif btn_id == "btn-join":
             self.action_nav_join()
-        elif btn_id == "btn-instant":
-            self.action_nav_instant()
         elif btn_id == "btn-config-name":
             self.action_config_name()
         elif btn_id == "btn-exit":
@@ -186,9 +189,6 @@ class MainMenuScreen(Screen):
 
     def action_nav_join(self) -> None:
         self.app.push_screen("join_room")
-
-    def action_nav_instant(self) -> None:
-        self.app.push_screen("instant_connection")
 
     def action_config_name(self) -> None:
         app: ClicomApp = self.app  # type: ignore

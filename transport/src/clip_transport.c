@@ -9,6 +9,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+typedef CRITICAL_SECTION clip_trans_mutex_t;
+#define trans_mutex_init(m) InitializeCriticalSection(m)
+#define trans_mutex_lock(m) EnterCriticalSection(m)
+#define trans_mutex_unlock(m) LeaveCriticalSection(m)
+#define trans_mutex_destroy(m) DeleteCriticalSection(m)
+#else
+#include <pthread.h>
+typedef pthread_mutex_t clip_trans_mutex_t;
+#define trans_mutex_init(m) pthread_mutex_init(m, NULL)
+#define trans_mutex_lock(m) pthread_mutex_lock(m)
+#define trans_mutex_unlock(m) pthread_mutex_unlock(m)
+#define trans_mutex_destroy(m) pthread_mutex_destroy(m)
+#endif
+
 struct clip_transport {
     bool is_server;
     clip_socket_t sock;
@@ -16,9 +33,12 @@ struct clip_transport {
     SSL *ssl;
     bool owns_ctx;
     bool tls_established;
+    bool insecure_skip_verify;
     char expected_host[256];
     char tls_version[32];
     char cipher_name[64];
+    clip_trans_mutex_t io_mutex;
+    bool mutex_initialized;
 };
 
 ClipError clip_transport_create_server(const clip_tls_server_config_t *config,
@@ -89,6 +109,8 @@ ClipError clip_transport_create_server(const clip_tls_server_config_t *config,
     trans->ssl = NULL;
     trans->owns_ctx = true;
     trans->tls_established = false;
+    trans_mutex_init(&trans->io_mutex);
+    trans->mutex_initialized = true;
 
     *out_trans = trans;
     return CLIP_OK;
@@ -122,16 +144,22 @@ ClipError clip_transport_create_client(const clip_tls_client_config_t *config,
             char err_buf[256];
             clip_tls_get_last_error(err_buf, sizeof(err_buf));
             CLIP_LOGE("Failed to load trusted CA '%s': %s", config->ca_file, err_buf);
-            SSL_CTX_free(ctx);
-            return CLIP_ERR_TLS_CERT_VERIFY;
+            if (!config->insecure_skip_verify) {
+                SSL_CTX_free(ctx);
+                return CLIP_ERR_TLS_CERT_VERIFY;
+            }
         }
     } else {
         /* Use system default CA locations */
         SSL_CTX_set_default_verify_paths(ctx);
     }
 
-    /* Set strict peer verification: verify server certificate */
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    /* Set peer verification */
+    if (config->insecure_skip_verify) {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    } else {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    }
 
     /* Optional client mTLS cert */
     if (config->client_cert && config->client_key) {
@@ -151,6 +179,9 @@ ClipError clip_transport_create_client(const clip_tls_client_config_t *config,
     trans->ssl = NULL;
     trans->owns_ctx = true;
     trans->tls_established = false;
+    trans->insecure_skip_verify = config->insecure_skip_verify;
+    trans_mutex_init(&trans->io_mutex);
+    trans->mutex_initialized = true;
 
     if (config->expected_host && config->expected_host[0]) {
         strncpy(trans->expected_host, config->expected_host, sizeof(trans->expected_host) - 1);
@@ -219,42 +250,44 @@ ClipError clip_transport_connect(clip_transport_t *trans, const char *host, uint
 
     SSL_set_fd(trans->ssl, (int)trans->sock);
 
-    /* RFC 6066: IP literals MUST NOT be sent in SNI (server_name) extension.
-     * RFC 6125 / OpenSSL: Use SSL_set1_host for DNS names or SSL_set1_host for IP/hostname matching.
-     */
-    bool is_ip_literal = false;
-    struct in_addr test_in4;
+    if (!trans->insecure_skip_verify && trans->expected_host[0] != '\0') {
+        /* RFC 6066: IP literals MUST NOT be sent in SNI (server_name) extension.
+         * RFC 6125 / OpenSSL: Use SSL_set1_host for DNS names or SSL_set1_host for IP/hostname matching.
+         */
+        bool is_ip_literal = false;
 #ifdef _WIN32
-    if (inet_addr(trans->expected_host) != INADDR_NONE || strcmp(trans->expected_host, "255.255.255.255") == 0) {
-        is_ip_literal = true;
-    }
+        if (inet_addr(trans->expected_host) != INADDR_NONE || strcmp(trans->expected_host, "255.255.255.255") == 0) {
+            is_ip_literal = true;
+        }
 #else
-    if (inet_pton(AF_INET, trans->expected_host, &test_in4) == 1) {
-        is_ip_literal = true;
-    }
+        struct in_addr test_in4;
+        if (inet_pton(AF_INET, trans->expected_host, &test_in4) == 1) {
+            is_ip_literal = true;
+        }
 #endif
 
-    if (is_ip_literal) {
-        /* Do NOT set SNI for IP addresses (RFC 6066 Section 3).
-         * Set target IP address for IP-SAN verification in peer certificate.
-         */
-        X509_VERIFY_PARAM *param = SSL_get0_param(trans->ssl);
-        if (param) {
-            X509_VERIFY_PARAM_set1_ip_asc(param, trans->expected_host);
-        }
-    } else {
-        /* SNI (Server Name Indication) extension for FQDNs */
-        SSL_set_tlsext_host_name(trans->ssl, trans->expected_host);
+        if (is_ip_literal) {
+            /* Do NOT set SNI for IP addresses (RFC 6066 Section 3).
+             * Set target IP address for IP-SAN verification in peer certificate.
+             */
+            X509_VERIFY_PARAM *param = SSL_get0_param(trans->ssl);
+            if (param) {
+                X509_VERIFY_PARAM_set1_ip_asc(param, trans->expected_host);
+            }
+        } else {
+            /* SNI (Server Name Indication) extension for FQDNs */
+            SSL_set_tlsext_host_name(trans->ssl, trans->expected_host);
 
-        /* Strict Hostname verification (RFC 6125 / SAN DNS / CN checking) */
-        SSL_set1_host(trans->ssl, trans->expected_host);
+            /* Strict Hostname verification (RFC 6125 / SAN DNS / CN checking) */
+            SSL_set1_host(trans->ssl, trans->expected_host);
+        }
     }
 
     /* Perform TLS Handshake */
     int ret = SSL_connect(trans->ssl);
     if (ret <= 0) {
         long verify_err = SSL_get_verify_result(trans->ssl);
-        if (verify_err != X509_V_OK) {
+        if (verify_err != X509_V_OK && !trans->insecure_skip_verify) {
             CLIP_LOGE("TLS Certificate verification failed: %s (error code %ld)",
                            X509_verify_cert_error_string(verify_err), verify_err);
             clip_transport_shutdown(trans);
@@ -317,6 +350,8 @@ ClipError clip_transport_accept(clip_transport_t *server_trans,
     trans->ssl_ctx = server_trans->ssl_ctx;
     trans->owns_ctx = false;
     trans->tls_established = false;
+    trans_mutex_init(&trans->io_mutex);
+    trans->mutex_initialized = true;
 
     trans->ssl = SSL_new(server_trans->ssl_ctx);
     if (!trans->ssl) {
@@ -380,7 +415,12 @@ ClipError clip_transport_read(clip_transport_t *trans, void *buf, size_t count, 
     }
 
     *out_read = 0;
+
+    if (trans->mutex_initialized) trans_mutex_lock(&trans->io_mutex);
     int ret = SSL_read(trans->ssl, buf, (int)count);
+    int ssl_err = (ret <= 0) ? SSL_get_error(trans->ssl, ret) : SSL_ERROR_NONE;
+    if (trans->mutex_initialized) trans_mutex_unlock(&trans->io_mutex);
+
     if (ret > 0) {
         *out_read = (size_t)ret;
         return CLIP_OK;
@@ -390,10 +430,22 @@ ClipError clip_transport_read(clip_transport_t *trans, void *buf, size_t count, 
         return CLIP_ERR_SHUTDOWN;
     }
 
-    int ssl_err = SSL_get_error(trans->ssl, ret);
     if (ssl_err == SSL_ERROR_ZERO_RETURN) {
         return CLIP_ERR_SHUTDOWN;
     }
+
+    if (ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
+        *out_read = 0;
+        return CLIP_OK;
+    }
+
+#ifdef _WIN32
+    int wsa_err = WSAGetLastError();
+    if (ssl_err == SSL_ERROR_SYSCALL && (wsa_err == WSAEWOULDBLOCK || wsa_err == WSAEINTR)) {
+        *out_read = 0;
+        return CLIP_OK;
+    }
+#endif
 
     return CLIP_ERR_TLS_IO;
 }
@@ -405,15 +457,65 @@ ClipError clip_transport_write(clip_transport_t *trans, const void *buf, size_t 
     }
 
     size_t total_sent = 0;
+    int retry_count = 0;
     while (total_sent < count) {
         int to_write = (int)(count - total_sent);
+
+        if (trans->mutex_initialized) trans_mutex_lock(&trans->io_mutex);
         int ret = SSL_write(trans->ssl, (const char*)buf + total_sent, to_write);
-        if (ret <= 0) {
-            int ssl_err = SSL_get_error(trans->ssl, ret);
-            CLIP_LOGE("SSL_write failed (ssl_error=%d)", ssl_err);
-            return CLIP_ERR_TLS_IO;
+        int ssl_err = (ret <= 0) ? SSL_get_error(trans->ssl, ret) : SSL_ERROR_NONE;
+        if (trans->mutex_initialized) trans_mutex_unlock(&trans->io_mutex);
+
+        if (ret > 0) {
+            total_sent += (size_t)ret;
+            retry_count = 0;
+            continue;
         }
-        total_sent += (size_t)ret;
+
+        /* Non-blocking / transient wait handling with short timeout */
+        if (ssl_err == SSL_ERROR_WANT_WRITE || ssl_err == SSL_ERROR_WANT_READ) {
+            if (++retry_count > 50) {
+                CLIP_LOGE("SSL_write failed after retries (want %s)",
+                          (ssl_err == SSL_ERROR_WANT_WRITE) ? "write" : "read");
+                return CLIP_ERR_TLS_IO;
+            }
+            fd_set fds;
+            FD_ZERO(&fds);
+            FD_SET(trans->sock, &fds);
+            struct timeval tv = {0, 10000}; /* 10ms */
+            if (ssl_err == SSL_ERROR_WANT_WRITE) {
+                select((int)(trans->sock + 1), NULL, &fds, NULL, &tv);
+            } else {
+                select((int)(trans->sock + 1), &fds, NULL, NULL, &tv);
+            }
+            continue;
+        }
+
+#ifdef _WIN32
+        int wsa_err = WSAGetLastError();
+        if (ssl_err == SSL_ERROR_SYSCALL && (wsa_err == WSAEWOULDBLOCK || wsa_err == WSAEINTR)) {
+            if (++retry_count > 50) {
+                CLIP_LOGE("SSL_write failed after retries (WSAEWOULDBLOCK)");
+                return CLIP_ERR_TLS_IO;
+            }
+            fd_set write_fds;
+            FD_ZERO(&write_fds);
+            FD_SET(trans->sock, &write_fds);
+            struct timeval tv = {0, 10000}; /* 10ms */
+            select((int)(trans->sock + 1), NULL, &write_fds, NULL, &tv);
+            continue;
+        }
+#endif
+
+#ifdef _WIN32
+        int sys_err = WSAGetLastError();
+#else
+        int sys_err = errno;
+#endif
+        char ssl_str[256] = {0};
+        clip_tls_get_last_error(ssl_str, sizeof(ssl_str));
+        CLIP_LOGE("SSL_write failed (ssl_error=%d, sys_err=%d): %s", ssl_err, sys_err, ssl_str);
+        return CLIP_ERR_TLS_IO;
     }
 
     return CLIP_OK;
@@ -423,6 +525,7 @@ void clip_transport_shutdown(clip_transport_t *trans)
 {
     if (!trans) return;
 
+    if (trans->mutex_initialized) trans_mutex_lock(&trans->io_mutex);
     if (trans->ssl && trans->tls_established) {
         SSL_shutdown(trans->ssl);
     }
@@ -432,6 +535,7 @@ void clip_transport_shutdown(clip_transport_t *trans)
     }
 
     trans->tls_established = false;
+    if (trans->mutex_initialized) trans_mutex_unlock(&trans->io_mutex);
 }
 
 void clip_transport_free(clip_transport_t *trans)
@@ -440,6 +544,7 @@ void clip_transport_free(clip_transport_t *trans)
 
     clip_transport_shutdown(trans);
 
+    if (trans->mutex_initialized) trans_mutex_lock(&trans->io_mutex);
     if (trans->ssl) {
         SSL_free(trans->ssl);
         trans->ssl = NULL;
@@ -448,6 +553,11 @@ void clip_transport_free(clip_transport_t *trans)
     if (trans->owns_ctx && trans->ssl_ctx) {
         SSL_CTX_free(trans->ssl_ctx);
         trans->ssl_ctx = NULL;
+    }
+    if (trans->mutex_initialized) {
+        trans_mutex_unlock(&trans->io_mutex);
+        trans_mutex_destroy(&trans->io_mutex);
+        trans->mutex_initialized = false;
     }
 
     free(trans);
@@ -491,5 +601,8 @@ int clip_transport_get_peer_cert_info(const clip_transport_t *trans, char *buf, 
 bool clip_transport_has_pending(const clip_transport_t *trans)
 {
     if (!trans || !trans->ssl || !trans->tls_established) return false;
-    return SSL_pending(trans->ssl) > 0;
+    if (trans->mutex_initialized) trans_mutex_lock((clip_trans_mutex_t*)&trans->io_mutex);
+    int p = SSL_pending(trans->ssl);
+    if (trans->mutex_initialized) trans_mutex_unlock((clip_trans_mutex_t*)&trans->io_mutex);
+    return (p > 0);
 }

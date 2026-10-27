@@ -33,6 +33,9 @@ def get_candidate_dll_paths(explicit_path: Optional[str] = None) -> List[Path]:
 
     root = get_project_root()
     relative_candidates = [
+        root / "dist_client" / "libclicom_engine.dll",
+        root / "dist_client" / "client" / "libclicom_engine.dll",
+        root / "client" / "libclicom_engine.dll",
         root / "build" / "windows-ninja-debug" / "engine" / "libclicom_engine.dll",
         root / "build" / "windows-ninja-debug" / "engine" / "clicom_engine.dll",
         root / "engine" / "build" / "libclicom_engine.dll",

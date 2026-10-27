@@ -62,18 +62,19 @@ async def test_main_menu_navigation_join_room():
 
 
 @pytest.mark.asyncio
-async def test_main_menu_navigation_instant_connection():
-    """Verify navigating to Instant Connection and back via Escape."""
+async def test_main_menu_navigation_display_name_modal():
+    """Verify opening display name modal via '3' key binding and closing via Escape."""
+    from client.screens.main_menu import DisplayNameModal
     app = ClicomApp()
     async with app.run_test() as pilot:
         await pilot.pause()
 
-        # Press '3' to navigate to Instant Connection
+        # Press '3' to open Configure Local Display Name
         await pilot.press("3")
         await pilot.pause()
-        assert isinstance(app.screen, InstantConnectionScreen)
+        assert isinstance(app.screen, DisplayNameModal)
 
-        # Press Escape to return to Main Menu
+        # Press Escape to dismiss modal
         await pilot.press("escape")
         await pilot.pause()
         assert isinstance(app.screen, MainMenuScreen)

@@ -296,7 +296,7 @@ class NativeEngine:
             raise DllNotFoundError(f"DLL path does not exist: {path}")
 
         if hasattr(os, "add_dll_directory"):
-            for dll_dir in [r"C:\msys64\ucrt64\bin", r"C:\msys64\mingw64\bin"]:
+            for dll_dir in [str(path.parent), r"C:\msys64\ucrt64\bin", r"C:\msys64\mingw64\bin"]:
                 if os.path.isdir(dll_dir):
                     try:
                         os.add_dll_directory(dll_dir)
