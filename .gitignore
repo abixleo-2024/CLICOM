@@ -67,3 +67,12 @@ out.txt
 reproduce_*.py
 __pycache__/
 *.pyc
+# Private TLS keys and credentials
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python cache files
+__pycache__/
+*.py[cod]
